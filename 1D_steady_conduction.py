@@ -11,15 +11,24 @@ from numpy import linalg as la
 import matplotlib.pyplot as plt
 
 # ------------------ Geometry/ Mesh setup ---------------------------------------
-L = 5   # length of rod (m)
-w = 0.25   # width of rod (m)
-nx = 5   # nodes, element discretization
+L = 0.5   # length of rod (m)
+w = 0.1   # diamter of rod (m) (used in CV sizing too, so we leave as w)
+nx = 7   # nodes, element discretization
 ny = 1
 
 method = "a"            # This changes the node placements from type "a" to type "b" sets. I don't know if "b" works right, but it may be close
 show_plots = True
 
-dL = L/(nx-1)
+if(nx > 3):
+    dL = L/(nx-1)
+# elif(nx == 2):
+#     dL = L/3
+else:
+    dL = L/2
+if(ny > 1):
+    dw = w/(ny-1)
+else:
+    dw = w/2
 
 # -------------- Physics Conditions/ Boundary Conditions ------------------------
 
@@ -27,26 +36,47 @@ dL = L/(nx-1)
 b1_method = "temp"      # define what type of condition
 b2_method = "temp"
 
-T0 = 80                # give each BC a value, Fixed temps in degrees C
-TL = 20
+T0 = 100                # give each BC a value, Fixed temps in degrees C
+TL = 500
 
 # Physics
 k1 = 205                   # conductive heat transfer coefficient, W/m (aluminum)
+k1 = 1000                   # copper, or something. Example 4.1 from the book.
 k2 = 109                   # brass
 k2 = 0.1                   # plastic
 transition = 0.5           # percentage of rod which is material 1
 
-# ---------------------- Mesh Generation ----------------------------------------
-if(method == "a"):
-    points = np.linspace(dL/2,L-dL/2,nx-2)
-    points = np.hstack([0,points])
-    points = np.hstack([points,L])
-elif(method == "b"):
-    points = np.linspace(-dL/2,L+dL/2,nx)
+# Pipe Geometry
+d = w
+A_c = (np.pi/4)*(d**2)                  #A_c of the beam
 
-# new_points = np.array([])
-# for i in range(ny-1):
-#     points = np.hstack([points,points])
+# ---------------------- Mesh Generation ----------------------------------------
+# create nodes and fill with x positions.
+if(method == "a" and nx > 3):
+    points_x = np.linspace(dL/2,L-dL/2,nx-2)
+    points_x = np.hstack([0,points_x])
+    points_x = np.hstack([points_x,L])
+elif(method == "a" and nx == 3):
+    points_x = np.array([0, L/2, L])
+elif(method == "b"):
+    points_x = np.linspace(-dL/2,L+dL/2,nx)
+
+# if(method == "a" and ny > 3):
+#     points_y = np.linspace(dw/2,w-dw/2,ny-2)
+#     points_y = np.hstack([0,points_y])
+#     points_y = np.hstack([points_y,w])
+# elif(method == "a" and ny == 1):
+#     points_y = np.array([dw])
+# elif(method == "a" and ny == 2):
+#     points_y = np.array([np.array([dw/2, w - dw/2])])
+# elif(method == "a" and ny == 3):
+#     points_y = np.array([np.array([0, w/2, w])])
+# elif(method == "b" or ny <= 2):
+#     points_y = np.linspace(-dw/2,w+dw/2,ny)
+
+points_y = np.ones(ny)*w/2
+
+points_x,points_y = np.meshgrid(points_x,points_y)
 
 # points = np.tile(points,ny)
 # points = np.reshape(points,(ny,nx))
@@ -55,81 +85,114 @@ elif(method == "b"):
 lim = max([w,L])
 if(show_plots):
     plt.figure()
-    plt.plot([0,L,L,0,0],[w/2,w/2,-w/2,-w/2,w/2])       #gives outline of the bar (what we are simulating our 1D conduction)
-    plt.scatter(points,np.zeros(np.size(points)),1,color='red')
+    plt.plot([0,L,L,0,0],[0,0,w,w,0])       #gives outline of the bar (what we are simulating our 1D conduction)
+    plt.scatter(points_x,points_y,1,color='red')
     plt.ylim([-lim/10-lim,lim+lim/10])
     plt.xlim([-lim/10, lim+lim/10])
 
 
 
 # define our "a" and "b" array/matrix
-ap = np.zeros_like(points)
+ap = np.zeros_like(np.squeeze(points_x))
 # np.fill_diagonal(ap,1)
-aw = np.zeros_like(points)
-ae = np.zeros_like(points)
-b = np.transpose(np.zeros_like(points))
+aW = np.zeros_like(ap)
+aE = np.zeros_like(ap)
+# aS = np.zeros_like(ap)
+# aN = np.zeros_like(ap)
+b = np.transpose(np.zeros(np.shape(ap)[0]))
 
-S = 0      # heat generation per m
+S = -5e-5    # heat generation per m
 nk1 = 0
 nk2 = 0
 k = k1
 
 for i in range(nx):
-    if(i > 0):
-        if(method == "a"):
-            if(i < nx-1):
-                aw[i] = k*dL/w
-            else:
-                aw[i] = k*dL/(2*w)
-        else:
-            aw[i] = k*dL/w
-    else:
-        aw[i] = 0
-    if(i < nx-1):
-        if(method == "a"):
-            if(i > 0):
-                ae[i] = k*dL/w
-            else:
-                ae[i] = k*dL/(2*w)
-        else:
-            ae[i] = k*dL/w
-    else:
-        ae[i] = 0
 
-    ap[i] = S/dL + (aw[i] + ae[i])      # ap - aw - ae - S = 0
+    if((i == 0 or i == nx-1) and method == "a"):
+        delta_L = dL/2
+    else:
+        delta_L = dL
+        # A_c could be caluclated here as a function of the rod diameter.
+
+    # set aW. Left most point is 0.
+    if(i > 0):
+        aW[i] = k*A_c/dw
+    else:
+        aW[i] = 0
+    # set aE. Right most point is 0.
+    if(i < nx-1):
+        aE[i] = k*A_c/dw
+    else:
+        aE[i] = 0
+    # if(j < ny-1):
+    #     if(method == "a"):
+    #         if(j > 0):
+    #             aN[j,i] = k*dw/dL
+    #         else:
+    #             aN[j,i] = k*dw/(2*dL)
+    #     else:
+    #         aN[j,i] = k*dL/dw
+    # else:
+    #     aN[j,i] = 0
+    # if(j > 0):
+    #     if(method == "a"):
+    #         if(j < ny-1):
+    #             aS[j,i] = k*dw/dL
+    #         else:
+    #             aS[j,i] = k*dw/(2*dL)
+    #     else:
+    #         aS[j,i] = k*dw/dL
+    # else:
+    #     aS[j,i] = 0
+
+    ap[i] = S/(delta_L) + (aW[i] + aE[i])      # ap - aw - ae - S = 0
+        # ap[j,i] = S/(delta_L*delta_w) + (aW[j,i] + aE[j,i] + aS[j,i] + aN[j,i]    # 2D?
 
 # make "A" matrix  (A*T = b)
 A = np.zeros([nx,nx])
+
+# remember, ap = aw + ae + an + as + S, so our aw and ae have to negative in the A matrix.
 for i in range(nx):
     if(i > 0):
-        A[i,i-1] = aw[i]
+        A[i-1,i] = -aW[i]   
     if(i < nx-1):
-        A[i,i+1] = ae[i]
+        A[i+1,i] = -aE[i]
     A[i,i] = ap[i]
+
+# set boundary conditions in A matrix
+A[:,0] = 0
+A[0,0] = 1          # Dirichlet boundary condition at x=0
+A[:,-1] = 0
+A[-1,-1] = 1        # Dirichlet boundary condition at x=L
+
+A = np.transpose(A)
 
 # make "b" vector, set with boundary conditions. (A*T = b)
 b = np.zeros([nx,1])
-b[0] = T0
-b[nx-1] = TL
+b[0] = T0           # Dirichlet boundary condition at x=0
+b[-1] = TL          # Dirichlet boundary condition at x=L
 
 T = la.solve(A,b)
 
-# print(T)
+print(T)
 
 if(show_plots == True):
     plt.figure()
-    plt.plot(points[0,:],T)
+    try:
+        plt.plot(np.transpose(points_x),T)
+    except:
+        plt.plot(points_x,T)
     plt.xlabel('Location (m)')
     plt.ylabel('Temp ($^\circ$C)')
-    # plt.show()
+    plt.show()
 
     contour_map_y = np.linspace(w/2,-w/2,ny)
 
     # define x,y coordinates
-    plot_plane_x = points[0,:]
+    plot_plane_x = points_x
     plot_plane_y = contour_map_y
 
-    X,Y = np.meshgrid(plot_plane_x,plot_plane_y)
+    Y,X = np.meshgrid(plot_plane_y,plot_plane_x)
     reps = np.shape(plot_plane_y)
     T_plot = np.tile(np.array([T]),reps)
     # ny = np.size(contour_map_y)
@@ -137,7 +200,12 @@ if(show_plots == True):
     T_plot = np.reshape(T_plot, (ny,nx))
 
     plt.figure()
-    plt.contourf(X,Y,T_plot)
+    if(nx > 1 and ny > 1):
+        plt.contourf(X,Y,T_plot)
+    else:
+        # T_plot_2D = T_plot.reshape(1,-1)
+        plt.imshow(T_plot, aspect='auto', cmap='viridis',extent=[points_x.min(), points_x.max(), -w/2, w/2])
+        plt.colorbar(label='Temp ($^\circ$C)')
     plt.ylim([-lim/10-lim,lim+lim/10])
-    plt.xlim([-lim/10, lim+lim/10])
+    plt.xlim([0-dL,L+dL])
     plt.show()
