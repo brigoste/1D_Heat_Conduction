@@ -184,20 +184,20 @@ if(b2_method == "temp"):
 # Neumann boundary conditions -> prescibed heat flux or insulated (q = 0)
 if(b1_method == "insulated"):
     A[0,0] = -k/(dL/2)
-    A[0,1]= k/(dL)
+    A[0,1]= k/(dL/2)
     b[0] = 0            # insulated = 0, prescribed heat flux, b = q0
 elif(b1_method == "flux"):
     A[0,0] = -k/(dL/2)
-    A[0,1]= k/(dL)
+    A[0,1]= k/(dL/2)
     b[0] = -qL
 
 if(b2_method == "insulated"):
     A[-1,-1] = -k/(dL/2)
-    A[-1,-2]= -k/(dL)
+    A[-1,-2]= k/(dL/2)
     b[-1] = 0            # insulated = 0, prescribed heat flux, b = q0
 elif(b2_method == "flux"):
     A[-1,-1] = -k/(dL/2)
-    A[-1,-2]= -k/(dL)
+    A[-1,-2]= k/(dL/2)
     b[-1] = -qR
 
 # Robin boundary conditions
