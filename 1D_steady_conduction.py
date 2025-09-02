@@ -11,9 +11,9 @@ from numpy import linalg as la
 import matplotlib.pyplot as plt
 
 # ------------------ Geometry/ Mesh setup ---------------------------------------
-L = 0.5   # length of rod (m)
-w = 0.1   # diamter of rod (m) (used in CV sizing too, so we leave as w)
-nx = 20   # nodes, element discretization
+L = 10   # length of rod (m)
+w = 1   # diamter of rod (m) (used in CV sizing too, so we leave as w)
+nx = 70   # nodes, element discretization
 ny = 1
 
 method = "a"            # This changes the node placements from type "a" to type "b" sets. I don't know if "b" works right, but it may be close
@@ -34,9 +34,11 @@ else:
 
 # BC's
 b1_method = "temp"      # define what type of condition
-b2_method = "insulated"
+b2_method = "temp"
 
-T0 = 200                # give each BC a value, Fixed temps in degrees C
+# Values for BC's and source term
+S = 10                  # heat generation per m (W/m) ("+" is heat leaving rod, "-" is heat entering rod)
+T0 = 200                # give each BC a value, Fixed temps in degrees C/K
 TL = 500
 
 if(b1_method == "flux"):
@@ -45,7 +47,7 @@ elif(b1_method == "insulated"):
     qL = 0
 
 if(b2_method == "flux"):
-    qR = 10
+    qR = -1000
 elif(b2_method == "insulated"):
     qR = 0
 
@@ -110,7 +112,6 @@ aE = np.zeros_like(ap)
 # aN = np.zeros_like(ap)
 b = np.transpose(np.zeros(np.shape(ap)[0]))
 
-S = 0    # heat generation per m
 nk1 = 0
 nk2 = 0
 k = k1
@@ -154,7 +155,7 @@ for i in range(nx):
     # else:
     #     aS[j,i] = 0
 
-    ap[i] = S/(delta_L) + (aW[i] + aE[i])      # ap - aw - ae - S = 0
+    ap[i] = S*(delta_L) + (aW[i] + aE[i])      # ap - aw - ae - S = 0
         # ap[j,i] = S/(delta_L*delta_w) + (aW[j,i] + aE[j,i] + aS[j,i] + aN[j,i]    # 2D?
 
 # make "A" matrix  (A*T = b)
@@ -174,36 +175,31 @@ b = np.zeros([nx,1])
 
 # Dirichlet boundary conditions -> prescibed temperature at one end
 if(b1_method == "temp"):
-    A[:,0] = 0
+    A[0,:] = 0
     A[0,0] = 1          # Dirichlet boundary condition at x=0
     b[0] = T0           # Dirichlet boundary condition at x=0
+# Neumann boundary conditions -> prescibed heat flux or insulated (q = 0)
+elif(b1_method == "flux" or b1_method == "insulated"):
+    A[0,:] = 0
+    A[0,0] = -k/(dL/2)
+    A[0,1]= k/(dL/2)
+    b[0] = qL * A_c     # insulated = 0, prescribed heat flux, b = q0
+
 if(b2_method == "temp"):
-    A[:,-1] = 0
+    A[-1,:] = 0
     A[-1,-1] = 1        # Dirichlet boundary condition at x=L
     b[-1] = TL          # Dirichlet boundary condition at x=L
 # Neumann boundary conditions -> prescibed heat flux or insulated (q = 0)
-if(b1_method == "insulated"):
-    A[0,0] = -k/(dL/2)
-    A[0,1]= k/(dL/2)
-    b[0] = 0            # insulated = 0, prescribed heat flux, b = q0
-elif(b1_method == "flux"):
-    A[0,0] = -k/(dL/2)
-    A[0,1]= k/(dL/2)
-    b[0] = -qL
-
-if(b2_method == "insulated"):
-    A[-1,-1] = -k/(dL/2)
-    A[-1,-2]= k/(dL/2)
-    b[-1] = 0            # insulated = 0, prescribed heat flux, b = q0
-elif(b2_method == "flux"):
-    A[-1,-1] = -k/(dL/2)
-    A[-1,-2]= k/(dL/2)
-    b[-1] = -qR
+elif(b2_method == "flux" or b2_method == "insulated"):
+    A[-1,:] = 0
+    A[-1,-1] = k/(dL/2)
+    A[-1,-2]= -k/(dL/2)
+    b[-1] = qR * A_c    # insulated = 0, prescribed heat flux, b = q0
 
 # Robin boundary conditions
 
 
-A = np.transpose(A)
+# A = np.transpose(A)       # this messed up our code. You don't see it in the Dirichlect BC, but you do in the Neumann conditions.
 T = la.solve(A,b)
 
 print(T)
