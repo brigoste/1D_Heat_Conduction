@@ -36,13 +36,21 @@ else:
 b1_method = "temp"      # define what type of condition
 b2_method = "temp"
 
+# options:
+#   1. "temp" - fixed temperature (defined with T0 or TL depending on your side (L and R))
+#   2. "flux" - fixed heat flux (defined with qL or qR depending on your side (L and R))
+#   3. "insulated" - no heat transfer (adiabatic)
+
 # Values for BC's and source term
-S = 10                  # heat generation per m (W/m) ("+" is heat leaving rod, "-" is heat entering rod)
-T0 = 200                # give each BC a value, Fixed temps in degrees C/K
-TL = 500
+S = -1                   # heat generation per m (W/m) ("+" is heat leaving rod, "-" is heat entering rod)
+T0 = 60                  # give each BC a value, Fixed temps in Kelvin
+TL = 300
+
+# In reality, I want the source term, S, to be our convective heat transfer and radiation term. 
+# It won't really be fixed, but will be a function of the temperature.
 
 if(b1_method == "flux"):
-    qL = 10                # prescribed flux at ends (only for "flux" bc)
+    qL = -10                # prescribed flux at ends (only for "flux" bc)
 elif(b1_method == "insulated"):
     qL = 0
 
@@ -53,14 +61,15 @@ elif(b2_method == "insulated"):
 
 # Physics
 k1 = 205                   # conductive heat transfer coefficient, W/m (aluminum)
-k1 = 1000                   # copper, or something. Example 4.1 from the book.
+# k1 = 1000                   # copper, or something. Example 4.1 from the book.
 k2 = 109                   # brass
 k2 = 0.1                   # plastic
-transition = 0.5           # percentage of rod which is material 1
+transition = 1           # percentage of rod which is material 1
 
 # Pipe Geometry
 d = w
-A_c = (np.pi/4)*(d**2)                  #A_c of the beam
+A_c = (np.pi/4)*(d**2) * np.ones(nx)                 #A_c of the beam
+
 
 # ---------------------- Mesh Generation ----------------------------------------
 # create nodes and fill with x positions.
@@ -126,12 +135,12 @@ for i in range(nx):
 
     # set aW. Left most point is 0.
     if(i > 0):
-        aW[i] = k*A_c/dw
+        aW[i] = k*np.average([A_c[i-1],A_c[i]])/dw
     else:
         aW[i] = 0
     # set aE. Right most point is 0.
     if(i < nx-1):
-        aE[i] = k*A_c/dw
+        aE[i] = k*np.average([A_c[i],A_c[i+1]])/dw
     else:
         aE[i] = 0
     # if(j < ny-1):
@@ -176,31 +185,31 @@ b = np.zeros([nx,1])
 # Dirichlet boundary conditions -> prescibed temperature at one end
 if(b1_method == "temp"):
     A[0,:] = 0
-    A[0,0] = 1          # Dirichlet boundary condition at x=0
-    b[0] = T0           # Dirichlet boundary condition at x=0
+    A[0,0] = 1                   # Dirichlet boundary condition at x=0
+    b[0] = T0           # Dirichlet boundary condition at x=0 (convert to Kelvin)
 # Neumann boundary conditions -> prescibed heat flux or insulated (q = 0)
 elif(b1_method == "flux" or b1_method == "insulated"):
     A[0,:] = 0
     A[0,0] = -k/(dL/2)
     A[0,1]= k/(dL/2)
-    b[0] = qL * A_c     # insulated = 0, prescribed heat flux, b = q0
+    b[0] = qL * A_c[0]     # insulated = 0, prescribed heat flux, b = q0
 
 if(b2_method == "temp"):
     A[-1,:] = 0
     A[-1,-1] = 1        # Dirichlet boundary condition at x=L
-    b[-1] = TL          # Dirichlet boundary condition at x=L
+    b[-1] = TL         # Dirichlet boundary condition at x=L (convert to Kelvin)
 # Neumann boundary conditions -> prescibed heat flux or insulated (q = 0)
 elif(b2_method == "flux" or b2_method == "insulated"):
     A[-1,:] = 0
     A[-1,-1] = k/(dL/2)
     A[-1,-2]= -k/(dL/2)
-    b[-1] = qR * A_c    # insulated = 0, prescribed heat flux, b = q0
+    b[-1] = qR * A_c[-1]    # insulated = 0, prescribed heat flux, b = q0
 
 # Robin boundary conditions
 
 
 # A = np.transpose(A)       # this messed up our code. You don't see it in the Dirichlect BC, but you do in the Neumann conditions.
-T = la.solve(A,b)
+T = la.solve(A,b)      # convert to celsius
 
 print(T)
 
