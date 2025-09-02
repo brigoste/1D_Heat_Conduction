@@ -82,6 +82,7 @@ elif(method == "a" and nx == 3):
 elif(method == "b"):
     points_x = np.linspace(-dL/2,L+dL/2,nx)
 
+#region added2D
 # if(method == "a" and ny > 3):
 #     points_y = np.linspace(dw/2,w-dw/2,ny-2)
 #     points_y = np.hstack([0,points_y])
@@ -94,6 +95,7 @@ elif(method == "b"):
 #     points_y = np.array([np.array([0, w/2, w])])
 # elif(method == "b" or ny <= 2):
 #     points_y = np.linspace(-dw/2,w+dw/2,ny)
+#endregion
 
 points_y = np.ones(ny)*w/2
 
@@ -143,6 +145,8 @@ for i in range(nx):
         aE[i] = k*np.average([A_c[i],A_c[i+1]])/dw
     else:
         aE[i] = 0
+
+    # region added2D
     # if(j < ny-1):
     #     if(method == "a"):
     #         if(j > 0):
@@ -163,6 +167,8 @@ for i in range(nx):
     #         aS[j,i] = k*dw/dL
     # else:
     #     aS[j,i] = 0
+    # endregion
+
 
     ap[i] = S*(delta_L) + (aW[i] + aE[i])      # ap - aw - ae - S = 0
         # ap[j,i] = S/(delta_L*delta_w) + (aW[j,i] + aE[j,i] + aS[j,i] + aN[j,i]    # 2D?
