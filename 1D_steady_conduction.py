@@ -11,9 +11,9 @@ from numpy import linalg as la
 import matplotlib.pyplot as plt
 
 # ------------------ Geometry/ Mesh setup ---------------------------------------
-L = 10   # length of rod (m)
-w = 1   # diamter of rod (m) (used in CV sizing too, so we leave as w)
-nx = 70   # nodes, element discretization
+L = 1   # length of rod (m)
+w = 0.1   # diamter of rod (m) (used in CV sizing too, so we leave as w)
+nx = 15   # nodes, element discretization
 ny = 1
 
 method = "a"            # This changes the node placements from type "a" to type "b" sets. I don't know if "b" works right, but it may be close
@@ -42,9 +42,14 @@ b2_method = "temp"
 #   3. "insulated" - no heat transfer (adiabatic)
 
 # Values for BC's and source term
-S = -1                   # heat generation per m (W/m) ("+" is heat leaving rod, "-" is heat entering rod)
-T0 = 60                  # give each BC a value, Fixed temps in Kelvin
+S = 0                   # heat generation per m (W/m) ("+" is heat leaving rod, "-" is heat entering rod)
+T0 = 60                 # give each BC a value, Fixed temps in Kelvin
 TL = 300
+h = 10
+T_inf = 400 + 273.15     # 20C in Kelvin
+P_inf = 101325
+
+added_convection = True
 
 # In reality, I want the source term, S, to be our convective heat transfer and radiation term. 
 # It won't really be fixed, but will be a function of the temperature.
@@ -53,11 +58,21 @@ if(b1_method == "flux"):
     qL = -10                # prescribed flux at ends (only for "flux" bc)
 elif(b1_method == "insulated"):
     qL = 0
+elif(b1_method == "convection"):
+    h = -10
+    T_inf = T_inf
+elif(b1_method == "temp"):
+    T0 = T0
 
 if(b2_method == "flux"):
     qR = -1000
 elif(b2_method == "insulated"):
     qR = 0
+elif(b2_method == "convection"):
+    h = 10
+    T_inf = T_inf
+elif(b2_method == "temp"):
+    TL = TL
 
 # Physics
 k1 = 205                   # conductive heat transfer coefficient, W/m (aluminum)
@@ -66,10 +81,22 @@ k2 = 109                   # brass
 k2 = 0.1                   # plastic
 transition = 1           # percentage of rod which is material 1
 
+R = 287                    # J/kg-k
+μ = 1.458e-6 * T_inf**(3/2) / (T_inf + 110.4) # viscosity of air at T_inf
+rho = P_inf/(R*T_inf)              # density of air at 300K
+U_inf = 10                # free stream velocity (m/s)
+cp_air = 1005            # specific heat of air (J/kg-K)
+k_air = 0.0257           # thermal conductivity of air (W/m-K)
+
 # Pipe Geometry
 d = w
 A_c = (np.pi/4)*(d**2) * np.ones(nx)                 #A_c of the beam
 
+# calculate the nussalt number for a pipe in crossflow to get "h"
+Re = rho*U_inf*d/μ
+Pr = μ*cp_air/k_air
+Nu = 0.3 + (0.62 * Re**0.5 * Pr**(1/3)) / (1 + (0.4/Pr)**(2/3))
+h = Nu * k_air / d
 
 # ---------------------- Mesh Generation ----------------------------------------
 # create nodes and fill with x positions.
@@ -114,7 +141,6 @@ if(show_plots):
     plt.xlim([-lim/10, lim+lim/10])
 
 
-
 # define our "a" and "b" array/matrix
 ap = np.zeros_like(np.squeeze(points_x))
 aW = np.zeros_like(ap)
@@ -127,6 +153,8 @@ nk1 = 0
 nk2 = 0
 k = k1
 
+store_dL = np.zeros(nx)
+
 for i in range(nx):
 
     if((i == 0 or i == nx-1) and method == "a"):
@@ -134,7 +162,7 @@ for i in range(nx):
     else:
         delta_L = dL
         # A_c could be caluclated here as a function of the rod diameter.
-
+    store_dL[i] = delta_L
     # set aW. Left most point is 0.
     if(i > 0):
         aW[i] = k*np.average([A_c[i-1],A_c[i]])/dw
@@ -188,6 +216,12 @@ for i in range(nx):
 # make "b" vector, set with boundary conditions. (A*T = b)
 b = np.zeros([nx,1])
 
+# add convection source term at every points
+if(added_convection == True):
+    for i in range(nx):
+        P = d * np.pi
+        b[i] = -h * P * store_dL[i] * T_inf
+
 # Dirichlet boundary conditions -> prescibed temperature at one end
 if(b1_method == "temp"):
     A[0,:] = 0
@@ -199,6 +233,11 @@ elif(b1_method == "flux" or b1_method == "insulated"):
     A[0,0] = -k/(dL/2)
     A[0,1]= k/(dL/2)
     b[0] = qL * A_c[0]     # insulated = 0, prescribed heat flux, b = q0
+# Robin boundary conditions
+elif(b1_method == "convection"):
+    A[0,:] = 0
+    A[0,0] = -h * A_c[0]
+    b[0] = h * T_inf * A_c[0]
 
 if(b2_method == "temp"):
     A[-1,:] = 0
@@ -207,17 +246,22 @@ if(b2_method == "temp"):
 # Neumann boundary conditions -> prescibed heat flux or insulated (q = 0)
 elif(b2_method == "flux" or b2_method == "insulated"):
     A[-1,:] = 0
-    A[-1,-1] = k/(dL/2)
+    A[-1,-1] = k/(dL/2) 
     A[-1,-2]= -k/(dL/2)
     b[-1] = qR * A_c[-1]    # insulated = 0, prescribed heat flux, b = q0
 
 # Robin boundary conditions
-
+elif(b2_method == "convection"):
+    A[-1,:] = 0
+    A[-1,-1] = k/(dL/2) + h * A_c[-1]
+    A[-1,-2] = -k/(dL/2)
+    b[-1] = -h * A_c[-1] * T_inf
 
 # A = np.transpose(A)       # this messed up our code. You don't see it in the Dirichlect BC, but you do in the Neumann conditions.
 T = la.solve(A,b)      # convert to celsius
 
 print(T)
+print(b)
 
 if(show_plots == True):
     plt.figure()
