@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 
 # ------------------ Geometry/ Mesh setup ---------------------------------------
 L = 1   # length of rod (m)
-w = 0.1   # diamter of rod (m) (used in CV sizing too, so we leave as w)
-nx = 15   # nodes, element discretization
+w = 0.3   # diamter of rod (m) (used in CV sizing too, so we leave as w)
+nx = 130   # nodes, element discretization
 ny = 1
 
 method = "a"            # This changes the node placements from type "a" to type "b" sets. I don't know if "b" works right, but it may be close
@@ -46,10 +46,10 @@ S = 0                   # heat generation per m (W/m) ("+" is heat leaving rod, 
 T0 = 60                 # give each BC a value, Fixed temps in Kelvin
 TL = 300
 h = 10
-T_inf = 400 + 273.15     # 20C in Kelvin
+T_inf = 100 + 273.15     # 20C in Kelvin
 P_inf = 101325
 
-added_convection = True
+added_convection = True    # Adds a convection source term to every node. This is in addition to any BC's you have.
 
 # In reality, I want the source term, S, to be our convective heat transfer and radiation term. 
 # It won't really be fixed, but will be a function of the temperature.
@@ -65,7 +65,7 @@ elif(b1_method == "temp"):
     T0 = T0
 
 if(b2_method == "flux"):
-    qR = -1000
+    qR = -1e6
 elif(b2_method == "insulated"):
     qR = 0
 elif(b2_method == "convection"):
@@ -83,8 +83,8 @@ transition = 1           # percentage of rod which is material 1
 
 R = 287                    # J/kg-k
 μ = 1.458e-6 * T_inf**(3/2) / (T_inf + 110.4) # viscosity of air at T_inf
-rho = P_inf/(R*T_inf)              # density of air at 300K
-U_inf = 10                # free stream velocity (m/s)
+rho = P_inf/(R*T_inf)              # density of air at T_inf
+U_inf = 1                # free stream velocity (m/s)
 cp_air = 1005            # specific heat of air (J/kg-K)
 k_air = 0.0257           # thermal conductivity of air (W/m-K)
 
